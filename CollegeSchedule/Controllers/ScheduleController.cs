@@ -15,7 +15,7 @@ namespace CollegeSchedule.Controllers
         {
             _service = service;
         }
-        //GET: api/shedule/group/{groupName}?start=2026-01-29
+        //GET: api/shedule/group/{groupName}?start=2026-01-29&end=2026-02-03
         [HttpGet("group/{groupName}")]
         public async Task<IActionResult> GetSchedule(string groupName, DateTime start, DateTime end)
         {
