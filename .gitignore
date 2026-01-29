@@ -1,0 +1,33 @@
+# Visual Studio files
+.vs/
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.vc.db
+
+# Rider IDE
+.idea/
+*.sln.iml
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+x64/
+x86/
+
+# .NET
+*.nupkg
+*.dotCover
+*.coverage
+
+# Environment files (с паролями!)
+.env
+*.env.local
+*.env.*.local
+
+# OS
+Thumbs.db
+.DS_Store
