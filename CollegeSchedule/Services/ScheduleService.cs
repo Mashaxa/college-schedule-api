@@ -5,6 +5,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CollegeSchedule.Services
 {
+    public class GroupResponse
+    {
+        public int GroupId { get; set; }
+        public string GroupName { get; set; } = null!;
+        public int Course { get; set; }
+        public string Specialty { get; set; } = null!;
+    }
+
     public class ScheduleService : IScheduleService
     {
         private readonly AppDbContext _db;
@@ -12,6 +20,7 @@ namespace CollegeSchedule.Services
         {
             _db = db;
         }
+
         public async Task<List<ScheduleByDateDto>> GetScheduleForGroup(string groupName, DateTime startDate, DateTime endDate)
         {
             ValidateDates(startDate, endDate);
@@ -19,11 +28,13 @@ namespace CollegeSchedule.Services
             var schedules = await LoadSchedules(group.GroupId, startDate, endDate);
             return BuildScheduleDto(startDate, endDate, schedules);
         }
+
         private static void ValidateDates(DateTime start, DateTime end)
         {
             if (start > end)
                 throw new ArgumentOutOfRangeException(nameof(start), "Дата начала больше даты окончания.");
         }
+
         private async Task<StudentGroup> GetGroupByName(string groupName)
         {
             var group = await _db.StudentGroups
@@ -32,8 +43,8 @@ namespace CollegeSchedule.Services
                 throw new KeyNotFoundException($"Группа {groupName} не найдена.");
             return group;
         }
-        private async Task<List<Schedule>> LoadSchedules(int groupId, DateTime start,
-       DateTime end)
+
+        private async Task<List<Schedule>> LoadSchedules(int groupId, DateTime start, DateTime end)
         {
             return await _db.Schedules
             .Where(s => s.GroupId == groupId &&
@@ -50,6 +61,7 @@ namespace CollegeSchedule.Services
             .ThenBy(s => s.GroupPart)
             .ToListAsync();
         }
+
         private static List<ScheduleByDateDto> BuildScheduleDto(DateTime startDate, DateTime endDate, List<Schedule> schedules)
         {
             var scheduleByDate = GroupSchedulesByDate(schedules);
@@ -69,64 +81,105 @@ namespace CollegeSchedule.Services
             }
             return result;
         }
-        
-        private static LessonDto BuildLessonDto(IGrouping<dynamic, Schedule>lessonGroup)
+
+        private static LessonDto BuildLessonDto(IGrouping<dynamic, Schedule> lessonGroup)
         {
             var lessonDto = new LessonDto
             {
                 LessonNumber = lessonGroup.Key.LessonNumber,
-                Time = $"{lessonGroup.Key.TimeStart:hh\\:mm}-{ lessonGroup.Key.TimeEnd:hh\\:mm}",
-                GroupParts = new Dictionary<LessonGroupPart, LessonPartDto?>() };
-                foreach (var part in lessonGroup)
-              {
-                  lessonDto.GroupParts[part.GroupPart] = new LessonPartDto
-                 {
-                 Subject = part.Subject.Name,
-                 Teacher = $"{part.Teacher.LastName} {part.Teacher.FirstName} {part.Teacher.MiddleName}",
-                 TeacherPosition = part.Teacher.Position,
-                 Classroom = part.Classroom.RoomNumber,
-                 Building = part.Classroom.Building.Name,
-                 Address = part.Classroom.Building.Address
-                 };
-              } 
+                Time = $"{lessonGroup.Key.TimeStart:hh\\:mm}-{lessonGroup.Key.TimeEnd:hh\\:mm}",
+                GroupParts = new Dictionary<LessonGroupPart, LessonPartDto?>()
+            };
+
+            foreach (var part in lessonGroup)
+            {
+                lessonDto.GroupParts[part.GroupPart] = new LessonPartDto
+                {
+                    Subject = part.Subject.Name,
+                    Teacher = $"{part.Teacher.LastName} {part.Teacher.FirstName} {part.Teacher.MiddleName}",
+                    TeacherPosition = part.Teacher.Position,
+                    Classroom = part.Classroom.RoomNumber,
+                    Building = part.Classroom.Building.Name,
+                    Address = part.Classroom.Building.Address
+                };
+            }
 
             if (!lessonDto.GroupParts.ContainsKey(LessonGroupPart.FULL))
-            lessonDto.GroupParts.TryAdd(LessonGroupPart.FULL, null);
+                lessonDto.GroupParts.TryAdd(LessonGroupPart.FULL, null);
 
             return lessonDto;
-           }
-         private static Dictionary<DateTime, List<Schedule>> 
-            GroupSchedulesByDate(List<Schedule> schedules)
-          {
+        }
+
+        private static Dictionary<DateTime, List<Schedule>> GroupSchedulesByDate(List<Schedule> schedules)
+        {
             return schedules
-            .GroupBy(s => s.LessonDate)
-            .ToDictionary(g => g.Key, g => g.ToList());
-          }
-private static ScheduleByDateDto BuildDayDto(List<Schedule> daySchedules)
-{
-    var lessons = daySchedules
-    .GroupBy(s => new {
-        s.LessonTime.LessonNumber,
-        s.LessonTime.TimeStart,
-        s.LessonTime.TimeEnd
-    })
-    .Select(BuildLessonDto)
-    .ToList();
-    return new ScheduleByDateDto
-    {
-        LessonDate = daySchedules.First().LessonDate,
-        Weekday = daySchedules.First().Weekday.Name,
-        Lessons = lessons
-    };
+                .GroupBy(s => s.LessonDate)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
+
+        private static ScheduleByDateDto BuildDayDto(List<Schedule> daySchedules)
+        {
+            var lessons = daySchedules
+                .GroupBy(s => new {
+                    s.LessonTime.LessonNumber,
+                    s.LessonTime.TimeStart,
+                    s.LessonTime.TimeEnd
+                })
+                .Select(BuildLessonDto)
+                .ToList();
+
+            return new ScheduleByDateDto
+            {
+                LessonDate = daySchedules.First().LessonDate,
+                Weekday = daySchedules.First().Weekday.Name,
+                Lessons = lessons
+            };
+        }
+
+        private static ScheduleByDateDto BuildEmptyDayDto(DateTime date)
+        {
+            return new ScheduleByDateDto
+            {
+                LessonDate = date,
+                Weekday = date.DayOfWeek.ToString(),
+                Lessons = new List<LessonDto>()
+            };
+        }
+
+        // новые методы для групп ПОИСК
+        public async Task<List<GroupResponse>> GetAllGroupsAsync() //все группы
+        {
+            return await _db.StudentGroups
+                .Include(g => g.Specialty)
+                .OrderBy(g => g.GroupName)
+                .Select(g => new GroupResponse //в удобный формать
+                {
+                    GroupId = g.GroupId,
+                    GroupName = g.GroupName,
+                    Course = g.Course,
+                    Specialty = g.Specialty.Name //берем только назв спец
+                })
+                .ToListAsync(); // выполняем запрос
+        }
+
+        public async Task<List<GroupResponse>> SearchGroupsAsync(string query) //поиск групп
+        {
+            if (string.IsNullOrWhiteSpace(query))
+                return await GetAllGroupsAsync(); //если пусто возвр все группы
+
+            return await _db.StudentGroups
+                .Include(g => g.Specialty)
+                .Where(g => g.GroupName.Contains(query) || g.Specialty.Name.Contains(query)) //ищем по назв/спец
+                .OrderBy(g => g.GroupName)
+                .Select(g => new GroupResponse
+                {
+                    GroupId = g.GroupId,
+                    GroupName = g.GroupName,
+                    Course = g.Course,
+                    Specialty = g.Specialty.Name
+                })
+                .Take(20) //макс 20 групп
+                .ToListAsync();
+        }
+    }
 }
-private static ScheduleByDateDto BuildEmptyDayDto(DateTime date)
-{
-    return new ScheduleByDateDto
-    {
-        LessonDate = date,
-        Weekday = date.DayOfWeek.ToString(),
-        Lessons = new List<LessonDto>()
-    };
-}
- }
-} 
